@@ -1,7 +1,7 @@
 import type { VueWrapper } from '@vue/test-utils'
 import { mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { defineComponent } from 'vue'
+import { defineComponent, nextTick } from 'vue'
 import { vElementBounding } from './directive'
 
 const App = defineComponent({
@@ -73,6 +73,125 @@ describe('vElementBounding', () => {
 
     it('should be defined', () => {
       expect(wrapper).toBeDefined()
+    })
+  })
+
+  describe('cleaning directives when components are unmounted', () => {
+    onBounding = vi.fn()
+    beforeEach(() => {
+      onBounding = vi.fn()
+      wrapper = mount(App, {
+        props: {
+          onBounding,
+        },
+        global: {
+          directives: {
+            ElementBounding: vElementBounding,
+          },
+        },
+      })
+    })
+
+    // Mock ResizeObserver
+    const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect
+    const mockGetBoundingClientRect = vi.fn(() => ({
+      width: 100,
+      height: 50,
+      top: 0,
+      right: 100,
+      bottom: 50,
+      left: 0,
+      x: 0,
+      y: 0,
+      toJSON: vi.fn(),
+    }))
+
+    it('should be defined', () => {
+      expect(wrapper).toBeDefined()
+    })
+
+    it('should call callback when element width change', async () => {
+      await nextTick()
+      HTMLElement.prototype.getBoundingClientRect = mockGetBoundingClientRect
+      const element = wrapper.element.querySelector('div')
+      if (element) {
+        element.style.width = '200px'
+
+        mockGetBoundingClientRect.mockReturnValue({
+          width: 200,
+          height: 50,
+          top: 0,
+          right: 200,
+          bottom: 50,
+          left: 0,
+          x: 0,
+          y: 0,
+          toJSON: vi.fn(),
+        })
+
+        // Manually trigger resize event
+        window.dispatchEvent(new Event('resize'))
+
+        await nextTick()
+        await nextTick()
+      }
+
+      expect(onBounding).toBeCalledTimes(1)
+
+      HTMLElement.prototype.getBoundingClientRect = originalGetBoundingClientRect
+    })
+
+    it('should not call callback after component is unmounted', async () => {
+      await nextTick()
+
+      HTMLElement.prototype.getBoundingClientRect = mockGetBoundingClientRect
+
+      const element = wrapper.element.querySelector('div')
+      if (element) {
+        element.style.width = '200px'
+        mockGetBoundingClientRect.mockReturnValue({
+          width: 200,
+          height: 50,
+          top: 0,
+          right: 200,
+          bottom: 50,
+          left: 0,
+          x: 0,
+          y: 0,
+          toJSON: vi.fn(),
+        })
+        window.dispatchEvent(new Event('resize'))
+        await nextTick()
+
+        // Clean up before unmount
+        onBounding.mockClear()
+
+        // Unmount the component
+        wrapper.unmount()
+        await nextTick()
+
+        if (element) {
+          element.style.width = '300px'
+          mockGetBoundingClientRect.mockReturnValue({
+            width: 300,
+            height: 50,
+            top: 0,
+            right: 300,
+            bottom: 50,
+            left: 0,
+            x: 0,
+            y: 0,
+            toJSON: vi.fn(),
+          })
+          window.dispatchEvent(new Event('resize'))
+          await nextTick()
+          await nextTick()
+        }
+
+        expect(onBounding).toBeCalledTimes(0)
+      }
+
+      HTMLElement.prototype.getBoundingClientRect = originalGetBoundingClientRect
     })
   })
 })
