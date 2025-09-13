@@ -1,4 +1,5 @@
 import type { OnLongPressOptions } from '@vueuse/core'
+import type { Fn } from '@vueuse/shared'
 import type { ObjectDirective } from 'vue'
 import { onLongPress } from '@vueuse/core'
 
@@ -9,15 +10,23 @@ type BindingValueArray = [
   OnLongPressOptions,
 ]
 
+const stopLongPressMap = new WeakMap<HTMLElement, Fn>()
+
 export const vOnLongPress: ObjectDirective<
   HTMLElement,
   BindingValueFunction | BindingValueArray
 > = {
   mounted(el, binding) {
+    let stop: Fn
     if (typeof binding.value === 'function')
-      onLongPress(el, binding.value, { modifiers: binding.modifiers })
+      stop = onLongPress(el, binding.value, { modifiers: binding.modifiers })
     else
-      onLongPress(el, ...binding.value)
+      stop = onLongPress(el, ...binding.value)
+    stopLongPressMap.set(el, stop)
+  },
+  unmounted(el) {
+    stopLongPressMap.get(el)?.()
+    stopLongPressMap.delete(el)
   },
 }
 
