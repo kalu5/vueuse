@@ -2,7 +2,7 @@ import type { VueWrapper } from '@vue/test-utils'
 import type { OnKeyStrokeOptions } from './index'
 import { mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { defineComponent } from 'vue'
+import { defineComponent, nextTick } from 'vue'
 import { vOnKeyStroke } from './directive'
 
 const App = defineComponent({
@@ -69,6 +69,37 @@ describe('vOnKeyStroke', () => {
 
     it('should be defined', () => {
       expect(wrapper).toBeDefined()
+    })
+  })
+  describe('stop listening when component is unmounted', async () => {
+    beforeEach(() => {
+      onUpdate = vi.fn()
+      wrapper = mount(App, {
+        props: {
+          onUpdate,
+        },
+        global: {
+          directives: {
+            'on-key-stroke': vOnKeyStroke,
+          },
+        },
+      })
+    })
+    it('should stop listening', async () => {
+      const element = wrapper.element.querySelector('div')
+      if (element) {
+        element.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' }))
+        await nextTick()
+        expect(onUpdate).toBeCalledTimes(1)
+        wrapper.unmount()
+        onUpdate.mockClear()
+        await nextTick()
+
+        element.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' }))
+        await nextTick()
+
+        expect(onUpdate).toBeCalledTimes(0)
+      }
     })
   })
 })
